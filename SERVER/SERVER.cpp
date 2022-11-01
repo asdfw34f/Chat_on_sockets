@@ -1,5 +1,4 @@
-﻿
-#undef UNICODE
+﻿#undef UNICODE
 
 #define WIN32_LEAN_AND_MEAN
 
@@ -11,7 +10,7 @@
 
 // Need to link with Ws2_32.lib
 #pragma comment (lib, "Ws2_32.lib")
-// #pragma comment (lib, "Mswsock.lib")
+#pragma comment (lib, "Mswsock.lib")
 
 #define DEFAULT_BUFLEN 512
 #define DEFAULT_PORT "27016"
@@ -33,10 +32,10 @@ int recvbuflen = DEFAULT_BUFLEN;
 HANDLE p, p1;
 DWORD IDPthread[2];
 
-
 DWORD WINAPI Client0(LPVOID Q)
 {
     iRes1 = recv(ClientSocket[0], recvbuf, recvbuflen, 0);
+
     if (iRes1 > 0)
     {
         //printf("Bytes received: %d\n", iRes1);
@@ -60,9 +59,9 @@ DWORD WINAPI Client0(LPVOID Q)
         WSACleanup();
         return 1;
     }
+
     return 0;
 }
-
 
 DWORD WINAPI Client1(LPVOID Q)
 {
@@ -156,8 +155,8 @@ int __cdecl main(void)
     while (isRunning) {
 
 
-            // Accept a client socket
-            ClientSocket[0] = accept(ListenSocket, NULL, NULL);
+        // Accept a client socket
+        ClientSocket[0] = accept(ListenSocket, NULL, NULL);
         if (ClientSocket[0] == INVALID_SOCKET) {
             printf("accept failed with error ClientSocket 1: %d\n", WSAGetLastError());
             closesocket(ListenSocket);
@@ -203,12 +202,13 @@ int __cdecl main(void)
         // cleanup
         closesocket(ClientSocket[0]);
         closesocket(ClientSocket[1]);
-        CloseHandle(p);
-        CloseHandle(p1);
+
     }
 
     // No longer need server socket
     closesocket(ListenSocket);
     WSACleanup();
+    CloseHandle(p);
+    CloseHandle(p1);
     return 0;
 }

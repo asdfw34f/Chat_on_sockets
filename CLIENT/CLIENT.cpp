@@ -5,24 +5,66 @@
 #include <ws2tcpip.h>
 #include <stdlib.h>
 #include <stdio.h>
-
+#include <locale.h>
+#include <synchapi.h>
+#include <time.h>
 
 // Need to link with Ws2_32.lib, Mswsock.lib, and Advapi32.lib
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
 
-
 #define DEFAULT_BUFLEN 512
 #define DEFAULT_PORT "27016"
 
+WSADATA wsaData;
+SOCKET ConnectSocket = INVALID_SOCKET;
+struct addrinfo* result = NULL, * ptr, hints;
+int iResult;
+
+HANDLE thread_get, thread_send;
+DWORD IDthread_get, IDthread_send;
+
+char recvbuf[DEFAULT_BUFLEN] = { 0 };
+int recvbuflen = DEFAULT_BUFLEN;
+char buffer[MAX_PATH] = { 0 };
+
+DWORD WINAPI get_message(LPVOID lp)
+{
+    iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+
+    if (iResult > 0)
+    {
+        //printf("Bytes received: %d\n", iResult);
+        printf("New message: %s\n", recvbuf);
+    }
+    else if (iResult == 0)
+        printf("Connection closed\n");
+    else
+        printf("recv failed with error: %d\n", WSAGetLastError());
+    memset(recvbuf, 0, sizeof(recvbuf));
+    return 0;
+}
+
+DWORD WINAPI send_message(LPVOID lp)
+{
+    printf("Enter message:\n");
+    scanf_s("%s", buffer, sizeof(buffer));
+
+    // Send an initial buffer
+    iResult = send(ConnectSocket, buffer, (int)strlen(buffer), 0);
+    if (iResult == SOCKET_ERROR) {
+        printf("send failed with error: %d\n", WSAGetLastError());
+        closesocket(ConnectSocket);
+        WSACleanup();
+        return 1;
+    }
+    return 0;
+}
+
+
 int __cdecl main(int argc, char** argv)
 {
-    WSADATA wsaData;
-    SOCKET ConnectSocket = INVALID_SOCKET;
-    struct addrinfo* result = NULL, * ptr, hints;
-    int iResult;
-
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
@@ -66,39 +108,16 @@ int __cdecl main(int argc, char** argv)
     }
 
     bool isRunning = true;
-    while (isRunning) {
-        char recvbuf[DEFAULT_BUFLEN] = { 0 };
-        int recvbuflen = DEFAULT_BUFLEN;
-        char buffer[MAX_PATH] = { 0 };
-        printf("Enter message:\n");
-        scanf_s("%s", buffer, sizeof(buffer));
-
-        // Send an initial buffer
-        iResult = send(ConnectSocket, buffer, (int)strlen(buffer), 0);
-        if (iResult == SOCKET_ERROR) {
-            printf("send failed with error: %d\n", WSAGetLastError());
-            closesocket(ConnectSocket);
-            WSACleanup();
-            return 1;
-        }
-
-        iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-        if (iResult > 0)
+    while (isRunning) 
+    {
+        thread_get = CreateThread(NULL, 0, get_message, (void*)0, 0, &IDthread_get);
+        thread_send = CreateThread(NULL, 0, send_message, (void*)0, 0, &IDthread_send);
+        
+        if (strncmp(buffer, "bye", strlen("bye")) == 0)
         {
-            //printf("Bytes received: %d\n", iResult);
-            printf("New message: %s\n", recvbuf);
-        }
-        else if (iResult == 0)
-            printf("Connection closed\n");
-        else
-            printf("recv failed with error: %d\n", WSAGetLastError());
-        memset(recvbuf, 0, sizeof(recvbuf));
-
-        if (strncmp(buffer, "bye", strlen("bye")) == 0) {
             isRunning = false;
         }
     }
-
 
     freeaddrinfo(result);
 
@@ -116,6 +135,8 @@ int __cdecl main(int argc, char** argv)
     // cleanup
     closesocket(ConnectSocket);
     WSACleanup();
+    CloseHandle(thread_get);
+    CloseHandle(thread_send);
 
     return 0;
 }
