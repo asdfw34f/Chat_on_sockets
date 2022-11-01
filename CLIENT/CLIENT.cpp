@@ -20,7 +20,7 @@ int __cdecl main(int argc, char** argv)
 {
     WSADATA wsaData;
     SOCKET ConnectSocket = INVALID_SOCKET;
-    struct addrinfo* result = NULL, *ptr, hints;
+    struct addrinfo* result = NULL, * ptr, hints;
     int iResult;
 
     // Initialize Winsock
@@ -85,8 +85,8 @@ int __cdecl main(int argc, char** argv)
         iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
         if (iResult > 0)
         {
-            printf("Bytes received: %d\n", iResult);
-            printf("Server message: %s\n", recvbuf);
+            //printf("Bytes received: %d\n", iResult);
+            printf("New message: %s\n", recvbuf);
         }
         else if (iResult == 0)
             printf("Connection closed\n");
@@ -112,7 +112,7 @@ int __cdecl main(int argc, char** argv)
         WSACleanup();
         return 1;
     }
-    
+
     // cleanup
     closesocket(ConnectSocket);
     WSACleanup();
