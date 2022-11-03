@@ -22,7 +22,7 @@ SOCKET ConnectSocket = INVALID_SOCKET;
 struct addrinfo* result = NULL, * ptr, hints;
 int iResult;
 
-HANDLE thread_get, thread_send;
+HANDLE thread_get, thread_send, object;
 DWORD IDthread_get, IDthread_send;
 
 char recvbuf[DEFAULT_BUFLEN] = { 0 };
@@ -32,16 +32,16 @@ char buffer[MAX_PATH] = { 0 };
 DWORD WINAPI get_message(LPVOID lp)
 {
     iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+    printf("New message: %s\n", recvbuf);
 
     if (iResult > 0)
     {
-        //printf("Bytes received: %d\n", iResult);
         printf("New message: %s\n", recvbuf);
     }
-    else if (iResult == 0)
-        printf("Connection closed\n");
-    else
-        printf("recv failed with error: %d\n", WSAGetLastError());
+    else if (iResult == 0) goto stop;
+    else printf("recv failed with error: %d\n", WSAGetLastError());
+
+stop:
     memset(recvbuf, 0, sizeof(recvbuf));
     return 0;
 }
@@ -107,12 +107,15 @@ int __cdecl main(int argc, char** argv)
         break;
     }
 
+    object = CreateMutex(0, false, 0);
+
     bool isRunning = true;
     while (isRunning) 
     {
         thread_get = CreateThread(NULL, 0, get_message, (void*)0, 0, &IDthread_get);
         thread_send = CreateThread(NULL, 0, send_message, (void*)0, 0, &IDthread_send);
-        
+        //WaitForSingleObject(thread_get, INFINITE);
+        //Sleep(3000);
         if (strncmp(buffer, "bye", strlen("bye")) == 0)
         {
             isRunning = false;
@@ -120,7 +123,6 @@ int __cdecl main(int argc, char** argv)
     }
 
     freeaddrinfo(result);
-
     printf("Client disconnected!\n");
 
     // shutdown the connection since no more data will be sent

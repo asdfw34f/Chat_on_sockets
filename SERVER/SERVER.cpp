@@ -1,5 +1,4 @@
 ﻿#undef UNICODE
-
 #define WIN32_LEAN_AND_MEAN
 
 #include <windows.h>
@@ -17,84 +16,68 @@
 #define MAX 256
 
 WSADATA wsaData;
-int iResult, iRes1, iRes2;
+int iResult, iResClient;
 
 SOCKET ListenSocket = INVALID_SOCKET;
-SOCKET ClientSocket[2] = { INVALID_SOCKET, INVALID_SOCKET };
+SOCKET ClientSocket = INVALID_SOCKET;
 
 struct addrinfo* result = NULL;
 struct addrinfo hints;
 
 int iSendResult;
-char recvbuf[DEFAULT_BUFLEN];
+
+char MY_message[DEFAULT_BUFLEN], NEW_message[DEFAULT_BUFLEN];
 int recvbuflen = DEFAULT_BUFLEN;
 
-HANDLE p, p1;
-DWORD IDPthread[2];
+HANDLE ThreadClient, object, Thread_get, Thread_send;
+DWORD IDthread_get, IDthread_send, IDPthreadClient;
 
-DWORD WINAPI Client0(LPVOID Q)
+DWORD WINAPI get_message(LPVOID lp)
 {
-    iRes1 = recv(ClientSocket[0], recvbuf, recvbuflen, 0);
+    iResult = recv(ClientSocket, NEW_message, recvbuflen, 0);
 
-    if (iRes1 > 0)
+    if (iResult > 0)
     {
-        //printf("Bytes received: %d\n", iRes1);
-        recvbuf[iRes1] = 0;
-        printf("Client message: %s\n", recvbuf);
-
-        // Send an initial buffer
-        int i = send(ClientSocket[1], recvbuf, iRes1, 0);
-        if (i == SOCKET_ERROR) {
-            printf("send failed with error: %d\n", WSAGetLastError());
-            closesocket(ClientSocket[0]);
-            WSACleanup();
-            return 1;
-        }
+        //printf("Bytes received: %d\n", iResult);
+        printf("New message: %s\n", NEW_message);
     }
-    else if (iRes1 == 0)
-        printf("Connection closing...\n");
-    else {
+    else if (iResult == 0)
+    {
+        printf("Connection closed\n");
+        ReleaseMutex(object);
+    }
+    else
+    {
         printf("recv failed with error: %d\n", WSAGetLastError());
-        closesocket(ClientSocket[0]);
-        WSACleanup();
-        return 1;
+        ReleaseMutex(object);
     }
 
+    memset(NEW_message, 0, sizeof(NEW_message));
     return 0;
 }
 
-DWORD WINAPI Client1(LPVOID Q)
+DWORD WINAPI send_message(LPVOID lp)
 {
-    //client 2
-    iRes2 = recv(ClientSocket[1], recvbuf, recvbuflen, 0);
-    if (iRes2 > 0)
-    {
-        //printf("Bytes received: %d\n", iRes2);
-        recvbuf[iRes2] = 0;
-        printf("Client message: %s\n", recvbuf);
+    printf("Enter message:\n");
+    scanf_s("%s", MY_message, sizeof(MY_message));
 
-        // Send an initial buffer
-        int i = send(ClientSocket[0], recvbuf, iRes2, 0);
-        if (i == SOCKET_ERROR) {
-            printf("send failed with error: %d\n", WSAGetLastError());
-            closesocket(ClientSocket[1]);
-            WSACleanup();
-            return 1;
-        }
-    }
-    else if (iRes2 == 0)
-        printf("Connection closing...\n");
-    else {
-        printf("recv failed with error: %d\n", WSAGetLastError());
-        closesocket(ClientSocket[1]);
+    // Send an initial MY_message
+    iResult = send(ClientSocket, MY_message, (int)strlen(MY_message), 0);
+    if (iResult == SOCKET_ERROR) {
+        printf("send failed with error: %d\n", WSAGetLastError());
+        ReleaseMutex(object);
+        closesocket(ClientSocket);
         WSACleanup();
         return 1;
     }
+    return 0;
+}
 
-    if (strncmp(recvbuf, "bye", strlen("bye")) == 0) {
-        iRes1 = 0;
-        iRes2 = 0;
-    }
+
+DWORD WINAPI Clients(LPVOID Q)
+{
+    Thread_get = CreateThread(NULL, 0, get_message, 0, 0, &IDPthreadClient);
+    Thread_send = CreateThread(NULL, 0, send_message, 0, 0, &IDPthreadClient);
 
     return 0;
 }
@@ -140,7 +123,6 @@ int __cdecl main(void)
         WSACleanup();
         return 1;
     }
-
     freeaddrinfo(result);
 
     iResult = listen(ListenSocket, SOMAXCONN);
@@ -150,65 +132,41 @@ int __cdecl main(void)
         WSACleanup();
         return 1;
     }
+    object = CreateMutex(0, false, 0);
 
     bool isRunning = true;
     while (isRunning) {
-
-
         // Accept a client socket
-        ClientSocket[0] = accept(ListenSocket, NULL, NULL);
-        if (ClientSocket[0] == INVALID_SOCKET) {
+        ClientSocket = accept(ListenSocket, NULL, NULL);
+        if (ClientSocket == INVALID_SOCKET) {
             printf("accept failed with error ClientSocket 1: %d\n", WSAGetLastError());
             closesocket(ListenSocket);
             WSACleanup();
             return 1;
         }
 
-        ClientSocket[1] = accept(ListenSocket, NULL, NULL);
-        if (ClientSocket[1] == INVALID_SOCKET) {
-            printf("accept failed with error ClientSocket 2 : %d\n", WSAGetLastError());
-            closesocket(ListenSocket);
-            WSACleanup();
-            //return 1;
-        }
-
         // Receive until the peer shuts down the connection
-        do {
-
-            p = CreateThread(NULL, 0, Client0, 0, 0, &IDPthread[0]);
-            WaitForSingleObject(p, INFINITE);
-            p1 = CreateThread(NULL, 0, Client1, 0, 0, &IDPthread[1]);
-            WaitForSingleObject(p1, INFINITE);
-
-        } while (iRes1 > 0 || iRes1 > 0);
+        do 
+        {
+            ThreadClient = CreateThread(NULL, 0, Clients, 0, 0, &IDPthreadClient);
+        } while (iResClient > 0 || iResClient > 0);
+        WaitForSingleObject(ThreadClient, INFINITE);
 
         // shutdown the connection since we're done
-        iResult = shutdown(ClientSocket[0], SD_SEND);
+        iResult = shutdown(ClientSocket, SD_SEND);
         if (iResult == SOCKET_ERROR) {
             printf("shutdown failed with error: %d\n", WSAGetLastError());
-            closesocket(ClientSocket[0]);
+            closesocket(ClientSocket);
             WSACleanup();
             return 1;
         }
-
-        iResult = shutdown(ClientSocket[1], SD_SEND);
-        if (iResult == SOCKET_ERROR) {
-            printf("shutdown failed with error: %d\n", WSAGetLastError());
-            closesocket(ClientSocket[1]);
-            WSACleanup();
-            return 1;
-        }
-
         // cleanup
-        closesocket(ClientSocket[0]);
-        closesocket(ClientSocket[1]);
-
+        closesocket(ClientSocket);
     }
-
+    
     // No longer need server socket
     closesocket(ListenSocket);
     WSACleanup();
-    CloseHandle(p);
-    CloseHandle(p1);
+    CloseHandle(ThreadClient);
     return 0;
 }
