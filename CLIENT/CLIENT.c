@@ -19,49 +19,13 @@
 
 WSADATA wsaData;
 SOCKET ConnectSocket = INVALID_SOCKET;
+
 struct addrinfo* result = NULL, * ptr, hints;
 int iResult;
-
-HANDLE thread_get, thread_send, object;
-DWORD IDthread_get, IDthread_send;
 
 char recvbuf[DEFAULT_BUFLEN] = { 0 };
 int recvbuflen = DEFAULT_BUFLEN;
 char buffer[MAX_PATH] = { 0 };
-
-DWORD WINAPI get_message(LPVOID lp)
-{
-    iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-    printf("New message: %s\n", recvbuf);
-
-    if (iResult > 0)
-    {
-        printf("New message: %s\n", recvbuf);
-    }
-    else if (iResult == 0) goto stop;
-    else printf("recv failed with error: %d\n", WSAGetLastError());
-
-stop:
-    memset(recvbuf, 0, sizeof(recvbuf));
-    return 0;
-}
-
-DWORD WINAPI send_message(LPVOID lp)
-{
-    printf("Enter message:\n");
-    scanf_s("%s", buffer, sizeof(buffer));
-
-    // Send an initial buffer
-    iResult = send(ConnectSocket, buffer, (int)strlen(buffer), 0);
-    if (iResult == SOCKET_ERROR) {
-        printf("send failed with error: %d\n", WSAGetLastError());
-        closesocket(ConnectSocket);
-        WSACleanup();
-        return 1;
-    }
-    return 0;
-}
-
 
 int __cdecl main(int argc, char** argv)
 {
@@ -86,11 +50,13 @@ int __cdecl main(int argc, char** argv)
     }
 
     // Attempt to connect to an address until one succeeds
-    for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
-
+    for (ptr = result; ptr != NULL; ptr = ptr->ai_next) 
+    {
         // Create a SOCKET for connecting to server
-        ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype,
+        ConnectSocket = socket(ptr->ai_family, 
+            ptr->ai_socktype,
             ptr->ai_protocol);
+
         if (ConnectSocket == INVALID_SOCKET) {
             printf("socket failed with error: %ld\n", WSAGetLastError());
             WSACleanup();
@@ -98,7 +64,10 @@ int __cdecl main(int argc, char** argv)
         }
 
         // Connect to server.
-        iResult = connect(ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
+        iResult = connect(ConnectSocket, 
+            ptr->ai_addr, 
+            (int)ptr->ai_addrlen);
+
         if (iResult == SOCKET_ERROR) {
             closesocket(ConnectSocket);
             ConnectSocket = INVALID_SOCKET;
@@ -107,19 +76,36 @@ int __cdecl main(int argc, char** argv)
         break;
     }
 
-    object = CreateMutex(0, false, 0);
-
-    bool isRunning = true;
+        BOOL isRunning = TRUE;
     while (isRunning) 
     {
-        thread_get = CreateThread(NULL, 0, get_message, (void*)0, 0, &IDthread_get);
-        thread_send = CreateThread(NULL, 0, send_message, (void*)0, 0, &IDthread_send);
-        //WaitForSingleObject(thread_get, INFINITE);
-        //Sleep(3000);
+        printf("Enter message:\n");
+        scanf_s("%s", buffer, sizeof(buffer));
+
+        // Send an initial buffer
+        iResult = send(ConnectSocket, 
+            buffer, 
+            (int)strlen(buffer), 0);
+
+        if (iResult == SOCKET_ERROR)
+            isRunning = FALSE;
         if (strncmp(buffer, "bye", strlen("bye")) == 0)
-        {
-            isRunning = false;
-        }
+            isRunning = FALSE;
+
+        memset(recvbuf, 0, sizeof(recvbuf));
+        iResult = recv(ConnectSocket,
+            recvbuf, recvbuflen, 0);
+        printf("New message: %s\n", recvbuf);
+        if (iResult > 0)
+            printf("New message: %s\n", recvbuf);
+        else if (iResult == 0) 
+            isRunning = FALSE;
+        //else {
+        //    printf("recv failed with error: %d\n",
+        //        WSAGetLastError());
+        //    isRunning = false;
+        //}
+        memset(recvbuf, 0, sizeof(recvbuf));
     }
 
     freeaddrinfo(result);
@@ -137,8 +123,5 @@ int __cdecl main(int argc, char** argv)
     // cleanup
     closesocket(ConnectSocket);
     WSACleanup();
-    CloseHandle(thread_get);
-    CloseHandle(thread_send);
-
     return 0;
 }
