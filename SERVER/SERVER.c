@@ -39,30 +39,30 @@ DWORD WINAPI client(LPVOID lp)
     memcpy(&client, lp, sizeof(SOCKET));
     BOOL isRunning_ = TRUE;
 
-    while (isRunning_) {
+    while (isRunning_ == TRUE) {
         char buffer[MAX_PATH] = { 0 };
-
-
-        int iResult_ = recv(client, 
+        int iResult_ = recv(client,
             buffer, sizeof(buffer), 0);
-        if (iResult > 0)
+
+        if (iResult_ > 0)
         {
-            printf("Client [%d] message: %s\n", client, buffer);
-            if (ClientSocket[0] == client)
-                iResult_ = send(ClientSocket[1],
-                    buffer, (int)strlen(buffer), 0);
-            else
-                iResult_ = send(ClientSocket[0], 
-                    buffer, (int)strlen(buffer), 0);
+            printf_s("Client [%d] message: %s\n", client, buffer);
+            if (ClientSocket[1] != INVALID_SOCKET)
+                if (ClientSocket[0] == client)
+                    iResult_ = send(ClientSocket[1],
+                        buffer, (int)strlen(buffer), 0);
+                else
+                    iResult_ = send(ClientSocket[0],
+                        buffer, (int)strlen(buffer), 0);
         }
         else if (iResult_ == 0)
         {
-            printf("Connection closed\n");
+            printf_s("Connection closed\n");
             isRunning_ = FALSE;
         }
         else
         {
-            printf("recv failed with error: %d\n",
+            printf_s("recv failed with error: %d\n",
                 WSAGetLastError());
             isRunning_ = FALSE;
         }
@@ -76,7 +76,7 @@ int __cdecl main(void)
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
-        printf("WSAStartup failed with error: %d\n", iResult);
+        printf_s("WSAStartup failed with error: %d\n", iResult);
         return 1;
     }
 
@@ -89,7 +89,7 @@ int __cdecl main(void)
     // Resolve the server address and port
     iResult = getaddrinfo(NULL, DEFAULT_PORT, &hints, &result);
     if (iResult != 0) {
-        printf("getaddrinfo failed with error: %d\n", iResult);
+        printf_s("getaddrinfo failed with error: %d\n", iResult);
         WSACleanup();
         return 1;
     }
@@ -98,7 +98,7 @@ int __cdecl main(void)
     ListenSocket = socket(result->ai_family, 
         result->ai_socktype, result->ai_protocol);
     if (ListenSocket == INVALID_SOCKET) {
-        printf("socket failed with error: %ld\n", 
+        printf_s("socket failed with error: %ld\n", 
             WSAGetLastError());
         freeaddrinfo(result);
         WSACleanup();
@@ -108,7 +108,7 @@ int __cdecl main(void)
     // Setup the TCP listening socket
     iResult = bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
     if (iResult == SOCKET_ERROR) {
-        printf("bind failed with error: %d\n", 
+        printf_s("bind failed with error: %d\n", 
             WSAGetLastError());
         freeaddrinfo(result);
         closesocket(ListenSocket);
@@ -119,7 +119,7 @@ int __cdecl main(void)
 
     iResult = listen(ListenSocket, SOMAXCONN);
     if (iResult == SOCKET_ERROR) {
-        printf("listen failed with error: %d\n", 
+        printf_s("listen failed with error: %d\n", 
             WSAGetLastError());
         closesocket(ListenSocket);
         WSACleanup();
@@ -128,11 +128,11 @@ int __cdecl main(void)
 
     object = CreateMutex(0, FALSE, 0);
     int idx = 0;
-    while (isRunning) {
+    while (isRunning == TRUE) {
         // Accept a client socket
         ClientSocket[idx] = accept(ListenSocket, NULL, NULL);
         if (ClientSocket[idx] == INVALID_SOCKET) {
-            printf("accept failed with error ClientSocket 1: %d\n", 
+            printf_s("accept failed with error ClientSocket: %d\n", 
                 WSAGetLastError());
             closesocket(ListenSocket);
             WSACleanup();
@@ -141,8 +141,24 @@ int __cdecl main(void)
         ThreadClient[idx] = CreateThread(NULL, 0, 
             client, &ClientSocket[idx], 
             0, &IDPthreadClient);
+        idx++;
     }
     
+    iResult = shutdown(ClientSocket[0], SD_SEND);
+    if (iResult == SOCKET_ERROR) {
+        printf_s("shutdown failed with error: %d\n", WSAGetLastError());
+        closesocket(ClientSocket);
+        WSACleanup();
+        return 1;
+    }
+    iResult = shutdown(ClientSocket[1], SD_SEND);
+    if (iResult == SOCKET_ERROR) {
+        printf_s("shutdown failed with error: %d\n", WSAGetLastError());
+        closesocket(ClientSocket);
+        WSACleanup();
+        return 1;
+    }
+
     // No longer need server socket
     closesocket(ListenSocket);
     WSACleanup();

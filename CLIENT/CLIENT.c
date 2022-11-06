@@ -50,10 +50,10 @@ int __cdecl main(int argc, char** argv)
     }
 
     // Attempt to connect to an address until one succeeds
-    for (ptr = result; ptr != NULL; ptr = ptr->ai_next) 
+    for (ptr = result; ptr != NULL; ptr = ptr->ai_next)
     {
         // Create a SOCKET for connecting to server
-        ConnectSocket = socket(ptr->ai_family, 
+        ConnectSocket = socket(ptr->ai_family,
             ptr->ai_socktype,
             ptr->ai_protocol);
 
@@ -64,8 +64,8 @@ int __cdecl main(int argc, char** argv)
         }
 
         // Connect to server.
-        iResult = connect(ConnectSocket, 
-            ptr->ai_addr, 
+        iResult = connect(ConnectSocket,
+            ptr->ai_addr,
             (int)ptr->ai_addrlen);
 
         if (iResult == SOCKET_ERROR) {
@@ -76,35 +76,34 @@ int __cdecl main(int argc, char** argv)
         break;
     }
 
-        BOOL isRunning = TRUE;
-    while (isRunning) 
+    BOOL isRunning_ = TRUE;
+    while (isRunning_ == TRUE)
     {
         printf("Enter message:\n");
         scanf_s("%s", buffer, sizeof(buffer));
 
         // Send an initial buffer
-        iResult = send(ConnectSocket, 
-            buffer, 
+        iResult = send(ConnectSocket,
+            buffer,
             (int)strlen(buffer), 0);
-
-        if (iResult == SOCKET_ERROR)
-            isRunning = FALSE;
         if (strncmp(buffer, "bye", strlen("bye")) == 0)
-            isRunning = FALSE;
+            isRunning_ = FALSE;
+        if (iResult == SOCKET_ERROR)
+            isRunning_ = FALSE;
 
         memset(recvbuf, 0, sizeof(recvbuf));
         iResult = recv(ConnectSocket,
             recvbuf, recvbuflen, 0);
-        printf("New message: %s\n", recvbuf);
+
         if (iResult > 0)
             printf("New message: %s\n", recvbuf);
-        else if (iResult == 0) 
-            isRunning = FALSE;
-        //else {
-        //    printf("recv failed with error: %d\n",
-        //        WSAGetLastError());
-        //    isRunning = false;
-        //}
+        else if (iResult == 0)
+            isRunning_ = FALSE;
+        else {
+            printf("recv failed with error: %d\n",
+                WSAGetLastError());
+            isRunning_ = FALSE;
+        }
         memset(recvbuf, 0, sizeof(recvbuf));
     }
 
